@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+
+# --- Combibrug data files (DO NOT commit real staff data) ---
+*.xlsx
+*.xls
+*.csv
+# but DO commit the template generators (they generate examples on the fly,
+# no actual file is ever committed)
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- Thesis build artefacts (LaTeX) ---
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
