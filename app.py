@@ -294,6 +294,9 @@ with tab_inputs:
 
     st.subheader("Employees")
 
+    if "cost_source" not in employees_df.columns:
+        employees_df["cost_source"] = "template"
+
     src_counts = employees_df["cost_source"].value_counts().to_dict()
     n_from_template = src_counts.get("template", 0)
 
