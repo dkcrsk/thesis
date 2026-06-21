@@ -131,48 +131,7 @@ with tab_upload:
 
     col_emp, col_dem = st.columns(2)
 
-    # ---- Employee template ----
-    with col_emp:
-        st.subheader("1 — Employee template (required)")
-        emp_upload = st.file_uploader(
-            "Choose employee template",
-            type=["xlsx"],
-            key="emp_uploader",
-            label_visibility="collapsed",
-        )
-        st.caption(
-            "Columns: id, role, company, contract_hours, hourly_cost, "
-            "contract_type, end_week (optional), is_dreammaker (optional)."
-        )
-        with st.expander("Need to create the employee template?"):
-            st.write(
-                "Upload your raw staff file (medewerkers…xlsx) once and the app "
-                "will pre-fill an employee template you can edit (add the real "
-                "hourly_cost, mark Dreammakers, set end_week for anyone leaving)."
-            )
-            seed_upload = st.file_uploader(
-                "Raw medewerkers file",
-                type=["xlsx"], key="seed_uploader",
-            )
-            if seed_upload is not None:
-                tmp_in = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False); tmp_in.close()
-                tmp_out = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False); tmp_out.close()
-                try:
-                    with open(tmp_in.name, "wb") as f:
-                        f.write(seed_upload.read())
-                    generate_employee_template(tmp_in.name, tmp_out.name)
-                    with open(tmp_out.name, "rb") as f:
-                        emp_template_bytes = f.read()
-                    st.download_button(
-                        "⬇️  Download pre-filled employee template",
-                        data=emp_template_bytes,
-                        file_name="employee_template.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                except Exception as e:
-                    st.error(f"Could not build the template: {e}")
-                finally:
-                    os.unlink(tmp_in.name); os.unlink(tmp_out.name)
+    
 
     # ---- Demand template ----
     with col_dem:
