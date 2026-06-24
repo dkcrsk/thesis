@@ -1,36 +1,3 @@
-"""
-model.py — Combibrug multi-period workforce MILP
-
-Objective: minimise total cost (internal staff + freelancer) plus soft penalties
-           for switching employees between sites and for spreading one employee
-           across many sites.
-
-Constraints
-    C1   Contract hours: each employee's weekly hours <= contract_hours
-    C2   Demand coverage: internal + freelancer hours == site weekly demand
-    C3   Company boundary: CC staff on CC sites only, Combibrug on Combibrug only
-    C4   Role eligibility: employee role must match site's required roles (if set)
-    C5   Assignment linking: k[i,j,t] <= max_blocks * y[i,j,t]
-    C6   Per-role headcount per site per week (optional)
-    C7   Continuity switch detection (soft penalty)
-    C8   Minimum total headcount — Four-Eyes rule for Combiworld/MDT sites
-    C9   Fixed project leader: named employee must be assigned every active week
-    C10  Stay until project end: once assigned to a project, employee stays
-         through all active weeks unless their end_week is reached first
-    C11  Location-spread linking (soft penalty)
-    C12  Minimum utilisation: permanent >= 60%, fixed_term >= 40% of contract hours
-    C13a Non-overlap: same employee cannot take two time-overlapping windows on same day
-    C13b 8-hour daily cap across all sites per employee per day
-    C14  Daily link: sum of chosen window lengths == block_size * k[i,j,t]
-
-Note: every variable and constraint name is passed through _safe() before it
-reaches PuLP. PuLP serialises the model to an LP file for CBC, and the LP format
-forbids spaces and most punctuation in identifiers. Site names at Combibrug
-routinely contain spaces (e.g. "Park Frankendael"), so without sanitisation two
-different names could collide in the LP file, silently merging variables and
-dropping constraints.
-"""
-
 import pandas as pd
 from pulp import (
     LpProblem, LpVariable, LpMinimize, LpBinary, LpInteger,
@@ -53,7 +20,6 @@ def apply_hourly_costs(employees_df, rates_df=None,
                        rate_column="rate_incl",
                        fallback_rate=DEFAULT_FALLBACK_RATE,
                        stage_rate=DEFAULT_STAGE_RATE):
-    """Attach an hourly_cost column to employees_df from an optional rates file."""
     out = employees_df.copy()
     missing_ids = []
 
@@ -91,12 +57,10 @@ def apply_hourly_costs(employees_df, rates_df=None,
 
 
 def _safe(name):
-    """Sanitise a string for use in a PuLP variable or constraint name."""
     return "".join(c if c.isalnum() else "_" for c in str(name))
 
 
 def _hours_to_hhmm(h):
-    """Convert decimal hours (8.5) to 'HH:MM' string ('08:30')."""
     hh = int(h)
     mm = int(round((h - hh) * 60))
     if mm == 60:
@@ -117,14 +81,6 @@ def solve_allocation(employees, locations,
                      max_hours_per_day=8,
                      time_limit=120,
                      verbose=False):
-    """Build and solve the multi-period MILP.
-
-    Returns
-    -------
-    status : str            e.g. 'Optimal', 'Infeasible'
-    assignments : DataFrame one row per non-zero (employee, site, week)
-    summary : dict          cost breakdown, freelancer hours, daily slots
-    """
     emp = employees.to_dict("records")
     loc = locations.to_dict("records")
     emp_by_id = {e["id"]: e for e in emp}
@@ -138,7 +94,6 @@ def solve_allocation(employees, locations,
 
     loc_active = {l["site"]: active_weeks(l) for l in loc}
 
-    # Pre-filter eligible (employee, site) pairs: same company + role match
     eligible_pairs = []
     for e in emp:
         for l in loc:
@@ -173,7 +128,6 @@ def solve_allocation(employees, locations,
         for l in loc for t in loc_active.get(l["site"], [])
     }
 
-    # Switch variables for C7 continuity penalty
     s = {}
     if continuity_penalty > 0:
         for (i, j) in eligible_pairs:
@@ -182,13 +136,11 @@ def solve_allocation(employees, locations,
                 if t > 1 and (t - 1) in active:
                     s[(i, j, t)] = LpVariable(f"s_{i}_{_safe(j)}_{t}", cat=LpBinary)
 
-    # Location-spread indicators for C11 soft penalty
     loc_used = {}
     if location_penalty > 0:
         for (i, j) in eligible_pairs:
             loc_used[(i, j)] = LpVariable(f"locused_{i}_{_safe(j)}", cat=LpBinary)
 
-    # Objective
     internal_cost = lpSum(
         emp_by_id[i]["hourly_cost"] * block_size * k[(i, j, t)]
         for (i, j, t) in eligible_pairs_t
@@ -215,7 +167,7 @@ def solve_allocation(employees, locations,
                     f"contract_{eid}_w{t}",
                 )
 
-    # C2. Demand coverage: internal + freelancer == weekly_hours (equality)
+    # C2. Demand coverage: internal + freelancer = weekly hours 
     for l in loc:
         for t in loc_active.get(l["site"], []):
             pairs_t = [(i, j, tt) for (i, j, tt) in eligible_pairs_t
@@ -252,12 +204,12 @@ def solve_allocation(employees, locations,
                                 f"headcount_{_safe(l['site'])}_{_safe(role)}_w{t}",
                             )
 
-    # C7. Continuity: s[i,j,t] >= |y[i,j,t] - y[i,j,t-1]|
+    # C7. Continuity
     for (i, j, t) in s:
         prob += s[(i, j, t)] >= y[(i, j, t)] - y[(i, j, t - 1)]
         prob += s[(i, j, t)] >= y[(i, j, t - 1)] - y[(i, j, t)]
 
-    # C8. Four-Eyes rule: minimum headcount per site + k >= y for each person
+    # C8. Four-Eyes rule
     for l in loc:
         min_hc = int(l.get("min_headcount", 0) or 0)
         if min_hc > 0:
@@ -300,7 +252,7 @@ def solve_allocation(employees, locations,
                 f"leader_block_{leader_id}_{_safe(l['site'])}_w{t}",
             )
 
-    # C10. Stay until project end (monotonicity on y_proj)
+    # C10. Stay until project end 
     if stay_until_end:
         proj_sites = {}
         for l in loc:
@@ -352,13 +304,13 @@ def solve_allocation(employees, locations,
                 f"stay_{i}_{_safe(proj)}_{t}",
             )
 
-    # C11. loc_used[(i,j)] = 1 if employee i works site j in any week
+    # C11
     for (i, j) in loc_used:
         week_vars = [(i, j, t) for t in loc_active.get(j, []) if (i, j, t) in y]
         for wv in week_vars:
             prob += loc_used[(i, j)] >= y[wv]
 
-    # C12. Minimum utilisation: permanent >= 60%, fixed_term >= 40% of contract hours
+    # C12. Minimum utilisation
     MIN_UTIL = {"permanent": 0.60, "fixed_term": 0.40}
     for e in emp:
         fraction = MIN_UTIL.get(e.get("contract_type", ""), 0.0)
@@ -385,7 +337,7 @@ def solve_allocation(employees, locations,
                 f"min_util_{eid}_w{t}",
             )
 
-    # Daily scheduling layer: C13a non-overlap, C13b 8h cap, C14 weekly link
+    # Daily scheduling layer
     z = {}
     if enable_daily_scheduling:
         site_windows = {}
@@ -412,7 +364,7 @@ def solve_allocation(employees, locations,
 
         emp_ids_with_pairs = sorted({p[0] for p in eligible_pairs})
 
-        # C13a. Non-overlap: two overlapping windows on the same day -> at most one
+        # C13a. Non-overlap
         for i in emp_ids_with_pairs:
             for t in weeks:
                 for day in ["Mon", "Tue", "Wed", "Thu", "Fri"]:
