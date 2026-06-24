@@ -1,41 +1,14 @@
-"""
-data_loader.py
---------------
-Reads the two Combibrug planning templates and returns two cleaned DataFrames:
-    - employees_df: one row per employee (role, company, contract hours, cost)
-    - locations_df: one row per project site with weekly demand and availability
-
-The artefact works with templates only. The raw staff register and the
-historical locations file are NOT read here: they were used during Data
-Understanding to learn the structure of the data and to build the first
-version of the model, and that understanding was turned into the two clean
-Excel templates this module loads. The MILP and the UI never touch any raw
-Excel file directly — they only consume the cleaned DataFrames returned below.
-"""
-
 import pandas as pd
 
-
-# The eight standard role categories used across the project. Kept here because
-# the model (model.py) imports it to build the per-role demand columns.
 ALL_ROLES = [
     "Combicoach", "Stagiair", "Jongerenbegeleider", "Buurtsportcoach",
     "Manager", "Cultuurcoordinator", "Leefstijlcoach", "Other",
 ]
 
-
 class DataLoadError(Exception):
-    """Raised when a template cannot be parsed.
-
-    Use a clear, planner-friendly message — these are surfaced directly
-    in the Streamlit UI.
-    """
     pass
 
-
-# ------------------------------------------------------------------
 # Demand (site) template
-# ------------------------------------------------------------------
 
 DEMAND_TEMPLATE_COLUMNS = {
     "site":           "Name of the specific site/location where work happens",
@@ -58,19 +31,7 @@ DAY_COLS = ["available_mon", "available_tue", "available_wed",
             "available_thu", "available_fri"]
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
-
 def _parse_windows(cell):
-    """Parse a day-availability cell into a list of (start_h, end_h) tuples
-    in decimal hours.
-
-    Examples:
-        "08:00-16:00"               -> [(8.0, 16.0)]
-        "08:00-12:00; 13:00-17:00"  -> [(8.0, 12.0), (13.0, 17.0)]
-        "" or NaN                   -> []
-
-    The parser tolerates spaces, en-dashes vs hyphens, and both ':' and '.'
-    as the H/M separator. Invalid pieces are skipped silently.
-    """
     if cell is None:
         return []
     s = str(cell).strip()
@@ -103,18 +64,7 @@ def _parse_windows(cell):
             continue
     return out
 
-
 def load_demand_template(path_or_buffer):
-    """Load a forward-looking demand template file.
-
-    Accepts either a file path (str / Path) or a file-like object
-    (e.g. a Streamlit UploadedFile). Supports both .xlsx and .csv.
-
-    The template has one row per project location and only needs a
-    handful of columns — see DEMAND_TEMPLATE_COLUMNS for the full list.
-
-    Returns a cleaned locations DataFrame ready for the optimisation model.
-    """
     try:
         name = getattr(path_or_buffer, "name", str(path_or_buffer))
         if str(name).lower().endswith(".csv"):
@@ -225,10 +175,7 @@ def load_demand_template(path_or_buffer):
 
     return df[out_cols].reset_index(drop=True)
 
-
-# ------------------------------------------------------------------
 # Employee template
-# ------------------------------------------------------------------
 
 EMPLOYEE_TEMPLATE_COLUMNS = {
     "id":             "Employee number (from the staff system)",
