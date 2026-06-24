@@ -1,21 +1,4 @@
 
-
-"""
-app.py
-------
-Streamlit dashboard for the Combibrug workforce planning artifact.
-
-Run from this directory with:
-
-    streamlit run app.py
-
-The app has four tabs:
-    1. Upload files — pick the input files from your computer
-    2. Inputs       — view loaded data and cost-source breakdown
-    3. Run plan     — solve the MILP, see KPIs and the assignment table
-    4. Diagnostics  — validation checks and per-employee explanations
-"""
-
 from pathlib import Path
 from io import BytesIO
 
@@ -34,10 +17,6 @@ from model import (
     explain_assignment,
 )
 
-
-# Ready-to-use example templates (offered as downloads on the Upload tab).
-# These are small, feasible demo files: edit them with your own data and
-# re-upload. Built in memory so the app stays self-contained.
 
 def _build_example_employee_xlsx():
     """Return an example employee template as Excel bytes."""
@@ -97,7 +76,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Sidebar — cost settings only (file upload moved to main area)
+# Sidebar 
 
 st.sidebar.title("Combibrug Workforce Planner")
 
@@ -113,7 +92,7 @@ st.sidebar.markdown("### Solver options")
 block_size = st.sidebar.selectbox(
     "Hours block size (per assignment)",
     options=[1, 2, 4],
-    index=0,  # default = 1 hour
+    index=0,  
     help="Internal assignments are integer multiples of this many hours. "
          "1 = full flexibility (recommended).",
 )
@@ -144,7 +123,6 @@ stay_until_end = st.sidebar.checkbox(
          "duration (unless they leave the company, per end_week).",
 )
 
-# that applies to every employee. These are not user choices.
 enable_daily_scheduling = True
 max_hours_per_day = 8
 
@@ -159,10 +137,10 @@ time_limit = st.sidebar.number_input(
 )
 
 
-# Tabs  (Upload is now the first tab)
+# Tabs  
 
 tab_upload, tab_inputs, tab_run, tab_diag = st.tabs(
-    ["📁 Upload files", "📋 Inputs", "▶️ Run plan", "🔍 Diagnostics"]
+    ["Upload files", "Inputs", "Run plan", "Diagnostics"]
 )
 
 
@@ -335,8 +313,7 @@ with tab_inputs:
     display_cols = [c for c in wanted_cols if c in locations_df.columns]
     st.dataframe(locations_df[display_cols], use_container_width=True, height=300)
 
-    # --- Validate project_leader_id and min_headcount at upload time so
-    # Rosa catches typos before pressing Solve.
+    
     if "project_leader_id" in locations_df.columns:
         valid_emp_ids = set(employees_df["id"].astype(int))
         leader_problems = []
@@ -372,10 +349,6 @@ with tab_inputs:
             )
 
     if "min_headcount" in locations_df.columns and "weekly_hours" in locations_df.columns:
-        # min_headcount × block_size must be <= weekly_hours, otherwise the
-        # model can't simultaneously cover demand exactly AND have enough
-        # people. Warn at the smallest block size since block_size is
-        # configurable at solve time.
         hc_problems = []
         for _, l in locations_df.iterrows():
             mhc = int(l.get("min_headcount", 0) or 0)
@@ -447,14 +420,11 @@ with tab_run:
         st.session_state["mp_assignments"] = assignments
         st.session_state["mp_summary"] = summary
         st.session_state["mp_locations_df"] = locations_df
-
-        # Diagnostics tab uses these generic names.
         st.session_state["last_status"] = status
         st.session_state["last_assignments"] = assignments
         st.session_state["last_summary"] = summary
         st.session_state["last_locations_df"] = locations_df
 
-    # --- Render results
     if "mp_summary" in st.session_state:
         status = st.session_state["mp_status"]
         assignments = st.session_state["mp_assignments"]
@@ -468,10 +438,6 @@ with tab_run:
         else:
             st.error(f"Solver status: {status}")
 
-        # Coverage — sum over active (location, week) cells.
-        # Note: with the exact-equality demand constraint (C2), coverage is
-        # always 100% by construction, and over-allocation is impossible.
-        # We still compute the percentage for display.
         fl_period = summary.get("freelancer_hours_by_period", {})
         total_demand = 0.0
         total_covered = 0.0
@@ -488,7 +454,6 @@ with tab_run:
                 total_demand += loc["weekly_hours"]
                 total_covered += supplied
 
-        # --- KPI row
         k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("Total cost", f"€{(summary.get('objective') or 0):,.0f}")
         k2.metric("Internal", f"€{(summary.get('internal_cost') or 0):,.0f}")
@@ -499,7 +464,6 @@ with tab_run:
         )
         k5.metric("Switches", f"{summary.get('n_switches', 0)}")
 
-        # and the solver actually placed slots
         daily_slots = summary.get("daily_slots")
         if (summary.get("daily_scheduling_enabled")
                 and daily_slots is not None and not daily_slots.empty):
@@ -534,8 +498,7 @@ with tab_run:
                 h, m = hhmm.split(":")
                 return int(h) * 60 + int(m)
 
-            # A stable colour per site, so the same site reads the same across
-            # the whole calendar.
+
             site_names = sorted(tt_week["site"].unique())
             palette = [
                 "#2E75B6", "#548235", "#BF9000", "#9E480E", "#7030A0",
@@ -544,17 +507,14 @@ with tab_run:
             ]
             site_colour = {s: palette[i % len(palette)] for i, s in enumerate(site_names)}
 
-            # Calendar bounds — find the earliest start and latest end across
-            # the week so the grid is tight around real working hours.
             all_starts = [_hhmm_to_min(s) for s in tt_week["start"]]
             all_ends = [_hhmm_to_min(e) for e in tt_week["end"]]
             day_start_min = min(all_starts) if all_starts else 8 * 60
             day_end_min = max(all_ends) if all_ends else 18 * 60
-            # round to the hour for clean gridlines
             grid_start = (day_start_min // 60) * 60
-            grid_end = -(-day_end_min // 60) * 60  # ceil to hour
+            grid_end = -(-day_end_min // 60) * 60  
             total_span = max(grid_end - grid_start, 60)
-            PX_PER_MIN = 0.9  # vertical scale
+            PX_PER_MIN = 0.9  
 
             def _render_day_column(day_slots, show_site=True):
                 """Render the absolutely-positioned blocks for one day."""
@@ -626,7 +586,6 @@ with tab_run:
                     f'{axis_col}{cols_html}</div>'
                 )
 
-            # ---- legend --------------------------------------------------
             legend = "".join(
                 f'<span style="display:inline-flex;align-items:center;'
                 f'margin:2px 10px 2px 0;font-size:11px;">'
@@ -664,7 +623,6 @@ with tab_run:
                 st.markdown(_render_calendar(tt_week, show_site=True),
                             unsafe_allow_html=True)
 
-            # ---- summary stats + download -------------------------------
             st.write("")
             total_emp_days = tt_week.groupby(["employee_id", "day"]).ngroups
             people_scheduled = tt_week["employee_id"].nunique()
@@ -677,7 +635,6 @@ with tab_run:
             tbuf = BytesIO()
             with pd.ExcelWriter(tbuf, engine="openpyxl") as writer:
                 tt_week.to_excel(writer, sheet_name=f"week_{sel_week}", index=False)
-                # also write the grid form for spreadsheet users
                 grid_rows = []
                 for emp_id, g in tt_week.groupby("employee_id"):
                     row = {"employee_id": emp_id,
@@ -706,9 +663,7 @@ with tab_run:
                 "available_mon..fri for the sites you want scheduled."
             )
 
-        # "Project · Site (hours)". When they're the same (the common
-        # default for one-site projects like most CC locations), the cell
-        # just shows "Site (hours)" to avoid visual noise.
+
         st.subheader(f"Weekly schedule ({horizon} weeks)")
         st.caption(
             "Each row is one employee. Each column is one week. Cells show "
@@ -725,7 +680,6 @@ with tab_run:
                     return f"{project} · {site} ({hrs}h)"
                 return f"{site} ({hrs}h)"
 
-            # sites in the same week, concatenate them.
             grouped = (
                 assignments
                 .groupby(["employee_id", "week"], as_index=False)
@@ -752,9 +706,7 @@ with tab_run:
 
             st.dataframe(schedule, use_container_width=True, height=500)
 
-        # Per-week cost chart
         st.subheader("Cost per week")
-        # Build cost-per-week from the assignments and freelancer hours.
         week_internal = (assignments.groupby("week")["cost"].sum().reindex(weeks, fill_value=0)
                         if not assignments.empty else pd.Series([0.0] * len(weeks), index=weeks))
         week_fl_hours = {t: sum(h for (loc, tt), h in fl_period.items() if tt == t) for t in weeks}
@@ -766,7 +718,6 @@ with tab_run:
         week_cost_df.index = [f"W{t}" for t in weeks]
         st.bar_chart(week_cost_df)
 
-        # Detailed assignments table
         st.subheader("Detailed assignments")
         if assignments.empty:
             st.write("No assignments.")
@@ -778,8 +729,6 @@ with tab_run:
                 hide_index=True,
             )
 
-        # Freelancer hours table (per site, summed over horizon)
-        # Lookup so the freelancer table can show the project name too
         site_to_project = dict(zip(plan_locations["site"], plan_locations["project"]))
         fl_rows = [
             {"project": site_to_project.get(s, s), "site": s,
@@ -797,7 +746,6 @@ with tab_run:
 
         buf = BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            # Summary
             pd.DataFrame([{
                 "horizon_weeks": horizon,
                 "status": status,
@@ -811,7 +759,6 @@ with tab_run:
 
             if not assignments.empty:
                 assignments.to_excel(writer, sheet_name="assignments", index=False)
-                # Schedule sheet (the pivoted view)
                 if "schedule" in dir():
                     schedule.to_excel(writer, sheet_name="schedule")
 
@@ -842,9 +789,6 @@ with tab_diag:
         assignments = st.session_state["last_assignments"]
         summary = st.session_state["last_summary"]
         status = st.session_state["last_status"]
-        # Validate against the locations that were active in the diagnosed
-        # month, not the full template — otherwise the "all covered" check
-        # would fail for projects that were not yet active that month.
         diag_locations = st.session_state.get("last_locations_df", locations_df)
 
         st.subheader("Validation")
